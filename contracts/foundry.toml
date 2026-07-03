@@ -1,0 +1,11 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
+
+[lint]
+# The market state machine is timestamp-driven BY SPEC (toon-meta#120): stake/commit/reveal
+# windows are hours-to-days scale, so sub-15s validator timestamp drift is immaterial.
+exclude_lints = ["block-timestamp"]
