@@ -2,3 +2,5 @@ node_modules/
 package-lock.json
 *.jwk.json
 throwaway-*.json
+out/
+.env.devnet-actors
