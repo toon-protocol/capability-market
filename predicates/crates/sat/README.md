@@ -12,6 +12,8 @@ Launch predicate 2 of [toon-meta#122](https://github.com/toon-protocol/toon-meta
 > 2. The submitted assignment decodes as exactly one boolean (byte `0x00` or `0x01`) per variable — exactly `num_vars` values, no more, no fewer.
 > 3. Every clause of I contains at least one literal made true by the assignment (literal `+k` is true iff variable `k` is assigned true; `-k` iff assigned false).
 >
+> An instance with **zero clauses** is well-formed and vacuously satisfied by any correctly-sized assignment (verdict `true`). This is deliberate: the instance is pinned and adversarially reviewed at market creation, so a trivially-true market is the creator's visible choice, never a submitter exploit — but reviewers of a pinned instance must reject empty instances.
+>
 > Any malformed input — truncated or padded assignment, non-boolean byte, wrong clause arity, zero or out-of-range literal, size ceilings exceeded, blob that does not decode — yields verdict `false` (a clean rejection). The check never panics: a panicking guest cannot produce a PASS proof, but the failure mode is spec'd here so code and English agree exactly.
 
 Implementation: `src/lib.rs` (`check` / `verdict`, `decode_instance`, `decode_assignment`). Pinned launch instance: `fixture::pinned_instance()` — 4 variables, 5 clauses.

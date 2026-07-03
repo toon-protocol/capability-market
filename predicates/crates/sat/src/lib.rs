@@ -9,6 +9,12 @@
 //! instance and assignment are both well-formed AND every clause is
 //! satisfied.
 //!
+//! An instance with ZERO clauses is well-formed and vacuously satisfied by
+//! any correctly-sized assignment (verdict `true`). This is deliberate: the
+//! instance is pinned and adversarially reviewed at market creation, so a
+//! trivially-true market is the creator's visible choice, never a submitter
+//! exploit. Reviewers of a pinned instance must reject empty instances.
+//!
 //! Failure-mode spec (normative): malformed input — wrong assignment
 //! length, non-boolean assignment byte, a clause that is not exactly three
 //! literals, a zero or out-of-range literal, instance-size ceilings
