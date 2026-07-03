@@ -714,6 +714,9 @@ dependencies = [
 [[package]]
 name = "difftest"
 version = "0.1.0"
+dependencies = [
+ "journal",
+]
 
 [[package]]
 name = "digest"
@@ -2448,6 +2451,9 @@ dependencies = [
 [[package]]
 name = "sat"
 version = "0.1.0"
+dependencies = [
+ "journal",
+]
 
 [[package]]
 name = "schemars"

@@ -18,7 +18,8 @@
 //! zero, running off the end of the program, halting with an empty stack),
 //! or malformed input encoding all yield verdict `false` — never a panic.
 
-pub mod journal;
+/// Canonical journal envelope (toon-meta#121), shared across predicates.
+pub use journal;
 
 use std::fmt;
 

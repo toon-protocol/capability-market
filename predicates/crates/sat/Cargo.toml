@@ -6,5 +6,6 @@ description = "Small 3-SAT floor predicate for the TOON capability market (toon-
 license = "MIT"
 
 [dependencies]
-# Intentionally dependency-free: the shared journal crate (serde) and RISC
+# Deliberately dependency-light: only the shared journal envelope crate. RISC
 # Zero guest deps arrive with the toolchain wiring; see README.
+journal = { path = "../journal" }

@@ -23,7 +23,8 @@
 //! produce a PASS proof either way, but the failure mode is spec'd so the
 //! natural-language proposition and the code agree exactly.
 
-pub mod journal;
+/// Canonical journal envelope (toon-meta#121), shared across predicates.
+pub use journal;
 
 use std::fmt;
 
