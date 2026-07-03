@@ -1,0 +1,10 @@
+[package]
+name = "sat"
+version = "0.1.0"
+edition = "2021"
+description = "Small 3-SAT floor predicate for the TOON capability market (toon-meta#122)"
+license = "MIT"
+
+[dependencies]
+# Intentionally dependency-free: the shared journal crate (serde) and RISC
+# Zero guest deps arrive with the toolchain wiring; see README.
