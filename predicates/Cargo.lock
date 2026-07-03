@@ -712,6 +712,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "difftest"
+version = "0.1.0"
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2440,6 +2444,10 @@ dependencies = [
  "toml",
  "yaml-rust2",
 ]
+
+[[package]]
+name = "sat"
+version = "0.1.0"
 
 [[package]]
 name = "schemars"
