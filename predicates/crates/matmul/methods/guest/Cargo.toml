@@ -1,0 +1,11 @@
+[package]
+name = "matmul-guest"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+risc0-zkvm = { version = "3.0", default-features = false, features = ["std"] }
+matmul = { path = "../.." }
+journal = { path = "../../../journal" }
