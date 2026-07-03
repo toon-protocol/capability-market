@@ -1,0 +1,29 @@
+{
+  "network": "toon-devnet",
+  "rpcUrl": "https://evm-rpc.devnet.toonprotocol.dev",
+  "chainId": 31337,
+  "deployedAt": "2026-07-03",
+  "deployer": "0xC746997f84cdA0B0D76d791384042F57ab638831",
+  "addresses": {
+    "usdc": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    "groth16Verifier": "0xa2DAfD768CcCAb26860935b00feEa4860Ffc9639",
+    "mockVerifier": "0xF9504AafEE9487E05eD121037777B0F7b4C03167",
+    "marketReal": "0x46879970393eB1a4E55CE868b77BD59DEfAEF459",
+    "marketMock": "0xd1aAc47737FdF1bb124121CE8eF0bee47dEd9AeA"
+  },
+  "deployBlocks": {
+    "groth16Verifier": 1485,
+    "mockVerifier": 1485,
+    "marketReal": 1486,
+    "marketMock": 1487
+  },
+  "usdcDecimals": 6,
+  "risc0": {
+    "risc0EthereumVersion": "v3.0.1",
+    "zkvmCompat": "risc0-zkvm 3.0.x (upstream pins 3.0.3; local prover r0vm/cargo-risczero 3.0.5)",
+    "groth16Selector": "0x73c457ba",
+    "controlRoot": "0xa54dc85ac99f851c92d7c96d7318af41dbe7c0194edfcc37eb4d422a998c1f56",
+    "bn254ControlId": "0x04446e66d300eb7fb45c9726bb53c793dda407a62e9601618bb43c5c14657ac0",
+    "mockVerifierSelector": "0xffffffff"
+  }
+}

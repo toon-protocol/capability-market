@@ -3,3 +3,4 @@ contracts/out/
 contracts/cache/
 contracts/broadcast/
 node_modules/
+e2e/.env.devnet
