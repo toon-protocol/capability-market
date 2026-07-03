@@ -1,0 +1,13 @@
+{
+  "name": "capability-market-e2e",
+  "private": true,
+  "type": "module",
+  "description": "e2e tooling for the capability market: Arweave predicate upload via the Turbo free tier (toon-meta#112)",
+  "scripts": {
+    "upload-predicate": "node upload-predicate.mjs"
+  },
+  "dependencies": {
+    "@ardrive/turbo-sdk": "^1.23.0",
+    "arweave": "^1.15.5"
+  }
+}
