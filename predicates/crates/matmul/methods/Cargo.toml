@@ -1,0 +1,12 @@
+[package]
+name = "matmul-methods"
+version = "0.1.0"
+edition = "2021"
+description = "risc0-build embedding of the matmul guest (ELF + image ID)"
+license = "MIT"
+
+[build-dependencies]
+risc0-build = "3.0"
+
+[package.metadata.risc0]
+methods = ["guest"]

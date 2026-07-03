@@ -1,0 +1,41 @@
+{
+  "encoding": "journal-v1: image_id(32) || market_params_hash(32) || submission_hash(32) || verdict(1 byte, 0x00=false/0x01=true); 97 bytes, tightly packed, no padding. Hash fields are opaque byte strings copied verbatim (byte i of the Rust array == byte i of the encoding == byte i of the Solidity bytes32). sha256 column is the journal digest CapabilityMarket.sol passes to the RISC Zero verifier. These vectors are the shared conformance fixture for the Solidity decoder (toon-meta#121).",
+  "vectors": [
+    {
+      "name": "all-zero fields, verdict false",
+      "image_id": "0000000000000000000000000000000000000000000000000000000000000000",
+      "market_params_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "submission_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "verdict": false,
+      "encoded": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "sha256": "136dd1a7d0a62859f2077a62b7673c5c712fb750604a15f5f6140ab2c5112327"
+    },
+    {
+      "name": "ascending bytes, verdict true",
+      "image_id": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "market_params_hash": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "submission_hash": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "verdict": true,
+      "encoded": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f01",
+      "sha256": "6f4921d8a2566cb8ffb47f3011bcd2c87e0e3d2af1f8a714b6cb86f07b96220d"
+    },
+    {
+      "name": "saturated/pattern fields, verdict true",
+      "image_id": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "market_params_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "submission_hash": "5555555555555555555555555555555555555555555555555555555555555555",
+      "verdict": true,
+      "encoded": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa555555555555555555555555555555555555555555555555555555555555555501",
+      "sha256": "adc18bc469f66467f75b56e93966fd952e75f9dc6666a91cb8ac27669e91ed0d"
+    },
+    {
+      "name": "realistic digests, verdict false",
+      "image_id": "c98fdcab9c8ef2a3a2f8f5f0d305aa50e4324a4c0a1eb0c50c0f1a2b3c4d5e6f",
+      "market_params_hash": "7d87c5ea75f7378bb701e404c50639161af3eff66293e9f375b5f17eb50476f4",
+      "submission_hash": "0202020202020202020202020202020202020202020202020202020202020202",
+      "verdict": false,
+      "encoded": "c98fdcab9c8ef2a3a2f8f5f0d305aa50e4324a4c0a1eb0c50c0f1a2b3c4d5e6f7d87c5ea75f7378bb701e404c50639161af3eff66293e9f375b5f17eb50476f4020202020202020202020202020202020202020202020202020202020202020200",
+      "sha256": "0c3861aa741eecccb33cc9685705120918400abcb22098962bc88fb13cb0e45a"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+[package]
+name = "template"
+version = "0.1.0"
+edition = "2021"
+description = "Predicate authoring template: copy this crate to write a new capability-market predicate (toon-meta#119 story 1)"
+license = "MIT"
+
+[dependencies]
+journal = { path = "../journal" }
+
+[dev-dependencies]
+template-methods = { path = "methods" }
+risc0-zkvm = "3.0"
