@@ -91,16 +91,15 @@ abstract contract CapabilityMarketBase is Test {
         market.commit(marketId, commitmentFor(who));
     }
 
+    /// @dev Canonical journal-v1 encoding (toon-meta#121): 97 tightly packed bytes —
+    ///      image_id(32) ‖ market_params_hash(32) ‖ submission_hash(32) ‖ verdict(1) —
+    ///      exactly what the Rust guest commits via env::commit_slice.
     function makeJournal(bytes32 imageId_, bytes32 paramsHash_, bytes32 submissionHash_, bool verdict)
         internal
         pure
         returns (bytes memory)
     {
-        return abi.encode(
-            CapabilityMarket.Journal({
-                imageId: imageId_, marketParamsHash: paramsHash_, submissionHash: submissionHash_, verdict: verdict
-            })
-        );
+        return abi.encodePacked(imageId_, paramsHash_, submissionHash_, verdict ? bytes1(0x01) : bytes1(0x00));
     }
 
     function validJournal() internal view returns (bytes memory) {

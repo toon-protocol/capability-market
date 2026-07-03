@@ -120,11 +120,8 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         address a = _actor(actorSeed);
         if (market.getCommitment(id, a).commitmentHash == bytes32(0)) return;
 
-        bytes memory journal = abi.encode(
-            CapabilityMarket.Journal({
-                imageId: IMAGE_ID, marketParamsHash: PARAMS_HASH, submissionHash: SOLUTION_HASH, verdict: true
-            })
-        );
+        // canonical journal-v1: 97 tightly packed bytes, verdict byte last
+        bytes memory journal = abi.encodePacked(IMAGE_ID, PARAMS_HASH, SOLUTION_HASH, bytes1(0x01));
         bytes memory seal = verifier.mockSeal(IMAGE_ID, sha256(journal));
         vm.prank(a);
         market.reveal(id, SOLUTION_HASH, SOLUTION_ARWEAVE_TX, SALT, seal, journal);

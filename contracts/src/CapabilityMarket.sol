@@ -61,9 +61,16 @@ contract CapabilityMarket {
         uint256 timestamp;
     }
 
-    /// @notice Journal layout per toon-meta#121 — must match the Rust guest's
+    /// @notice Journal per toon-meta#121 — must match the Rust journal crate's
     ///         `{image_id, market_params_hash, submission_hash, verdict}` exactly.
-    ///         Encoding: `abi.encode(Journal)` (each field padded to a 32-byte word).
+    ///         Canonical encoding (`journal-v1`): 97 tightly packed bytes —
+    ///         image_id(32) ‖ market_params_hash(32) ‖ submission_hash(32) ‖ verdict(1),
+    ///         verdict MUST be 0x00 (false) or 0x01 (true). The guest commits these raw
+    ///         bytes via `env::commit_slice`, so `sha256(journal)` over them IS the
+    ///         journal digest the RISC Zero verifier checks. Decoded by
+    ///         [`decodeJournal`], which is strict byte-for-byte with the Rust
+    ///         `Journal::decode` (golden vectors:
+    ///         predicates/crates/journal/tests/golden_journal_vectors.json).
     struct Journal {
         bytes32 imageId;
         bytes32 marketParamsHash;
@@ -78,6 +85,9 @@ contract CapabilityMarket {
     /// @dev toon-meta#121 eligibility check 5: bounty sanity ceiling (100 = 1%).
     uint256 public constant MAX_BOUNTY_BPS = 100;
     uint256 public constant BPS_DENOMINATOR = 10_000;
+
+    /// @notice Exact `journal-v1` encoded length: 3 × 32-byte digests + 1 verdict byte.
+    uint256 public constant JOURNAL_LENGTH = 97;
 
     /// @notice The staking token (USDC on Base, 6 decimals).
     IERC20 public immutable usdc;
@@ -138,6 +148,8 @@ contract CapabilityMarket {
     error CommitmentMismatch();
     error CommitAfterDeadline();
     error RevealWindowClosed();
+    error JournalWrongLength();
+    error JournalInvalidVerdictByte();
     error JournalImageIdMismatch();
     error JournalMarketParamsHashMismatch();
     error JournalSubmissionHashMismatch();
@@ -180,8 +192,8 @@ contract CapabilityMarket {
 
     /// @notice Create a market. Anyone can create one.
     /// @dev Enforces the on-chain eligibility checks from toon-meta#121 (checks 1, 3, 4, 5).
-    ///      Check 2 (predicate bytes retrievable from Arweave, sha256(bytes) == imageId) is an
-    ///      off-chain, pre-broadcast check — the contract cannot resolve Arweave.
+    ///      Check 2 (predicate ELF retrievable from Arweave, risc0 compute_image_id(elf) ==
+    ///      imageId) is an off-chain, pre-broadcast check — the contract cannot resolve Arweave.
     /// @param seedNoStake Author's cold-start liquidity, pulled via transferFrom into the NO
     ///        pool and recorded as the creator's NO stake.
     function createMarket(
@@ -323,10 +335,11 @@ contract CapabilityMarket {
         if (c.timestamp > m.deadline) revert CommitAfterDeadline();
 
         // 3. Verify the proof against the market's pinned image ID. Reverts when invalid.
+        //    sha256 over the raw 97 committed bytes IS the journal digest.
         verifier.verify(proof, m.imageId, sha256(journal));
 
-        // 4. Decode the journal (layout per toon-meta#121) and check field-by-field.
-        Journal memory j = abi.decode(journal, (Journal));
+        // 4. Decode the journal (strict journal-v1, toon-meta#121) and check field-by-field.
+        Journal memory j = decodeJournal(journal);
         if (j.imageId != m.imageId) revert JournalImageIdMismatch();
         if (j.marketParamsHash != m.marketParamsHash) revert JournalMarketParamsHashMismatch();
         if (j.submissionHash != solutionHash) revert JournalSubmissionHashMismatch();
@@ -339,6 +352,24 @@ contract CapabilityMarket {
         m.winner = msg.sender;
 
         emit Revealed(marketId, msg.sender, solutionHash, arweaveTx);
+    }
+
+    /// @notice Strict `journal-v1` decoder. MUST accept/reject the exact same byte-string
+    ///         set as the Rust journal crate's `Journal::decode`: exactly 97 bytes —
+    ///         image_id(32) ‖ market_params_hash(32) ‖ submission_hash(32) ‖ verdict(1) —
+    ///         and a verdict byte of 0x00 or 0x01; anything else reverts. Strictness
+    ///         matters: were 0x02+ accepted as "true", two different byte strings would
+    ///         decode to the same journal and the sha256 digest binding would no longer
+    ///         be injective over decoded values. Conformance is pinned by the golden
+    ///         vectors in predicates/crates/journal/tests/golden_journal_vectors.json.
+    function decodeJournal(bytes calldata journal) public pure returns (Journal memory j) {
+        if (journal.length != JOURNAL_LENGTH) revert JournalWrongLength();
+        j.imageId = bytes32(journal[0:32]);
+        j.marketParamsHash = bytes32(journal[32:64]);
+        j.submissionHash = bytes32(journal[64:96]);
+        uint8 verdictByte = uint8(journal[96]);
+        if (verdictByte > 0x01) revert JournalInvalidVerdictByte();
+        j.verdict = verdictByte == 0x01;
     }
 
     // ---------------------------------------------------------------------
