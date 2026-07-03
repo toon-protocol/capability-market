@@ -1,0 +1,13 @@
+{
+  "predicate": "matmul",
+  "image_id": "660d47e33136b07e362d5efac8669ee3d31603df5aa5c12dba41f91156e8ecff",
+  "elf_sha256": "f931359cf2b3aa7a31992e91811d1428d8a407040a57c1172c000759f094557d",
+  "elf_bytes": 175880,
+  "elf_gzip_bytes": 88048,
+  "built_with": {
+    "cargo_risczero": "3.0.5",
+    "risc0_zkvm": "3.0.5",
+    "docker_image": "risczero/risc0-guest-builder:r0.1.88.0"
+  },
+  "arweave_tx": "62uFTWV3AJFYdz1C4JFf2wye98r4VC3t-bhpdHWEbfw"
+}

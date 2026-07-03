@@ -8,6 +8,12 @@ license = "MIT"
 [dependencies]
 journal = { path = "../journal" }
 
+# check-predicate bin (envelope spec §3.1 check 2): recompute image IDs from
+# fetched predicate bytes; gunzip compressed-at-rest artifacts.
+risc0-binfmt = "3.0"
+flate2 = "1"
+hex = "0.4"
+
 [dev-dependencies]
 template-methods = { path = "methods" }
 risc0-zkvm = "3.0"
