@@ -39,12 +39,18 @@
 //! - **zero vectors** — a triple with `u_i = 0`, `v_i = 0` or `w_i = 0`
 //!   contributes nothing and exists only to misstate the scheme;
 //! - **duplicate products** — two triples with the same `(u_i, v_i)`. Over
-//!   GF(2) their contributions can cancel, so without this check a scheme
-//!   could smuggle in cancelling padding and the stated `r` would not count
-//!   `r` genuinely distinct rank-1 products.
+//!   GF(2) their contributions can cancel (or merge), so a canonical scheme
+//!   never lists the same product twice.
 //!
-//! The English proposition says "a rank-≤46 bilinear scheme": `r` must be
-//! the number of distinct, non-trivial products actually used.
+//! Note the precise strength of these checks: they enforce *canonical form*,
+//! not "r = number of distinct products". A submitter can still split one
+//! product into near-duplicates that evade the exact-`(u, v)` scan — e.g.
+//! `(u, v, w)` into `(u, v⊕d, w) + (u, d, w)` — but every such triple still
+//! counts toward `r`, so padding can only push a scheme *over* the bound,
+//! never under it. Soundness does not rest on the duplicate check at all:
+//! any accepted scheme is `r ≤ bound` nonzero rank-1 terms summing to the
+//! matmul tensor, which by definition witnesses rank ≤ bound. (See
+//! `tests/adversarial.rs::split_product_padding_counts_toward_rank`.)
 
 use journal::Journal;
 

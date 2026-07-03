@@ -75,6 +75,19 @@ fn proves_verdict_false_against_flagship_bound_46() {
 }
 
 #[test]
+fn proves_verdict_false_for_malformed_submission_not_trap() {
+    // Truncated submission (length not a multiple of 6): the guest must
+    // COMMIT verdict = false — the FALSE path is a real, provable journal
+    // (with the hash of the malformed bytes as evaluated), not a trap.
+    let params = encode_market_params(49);
+    let mut submission = encode_scheme(&schemes::strassen_4x4_rank49());
+    submission.pop();
+    let j = decode_journal(&dev_prove(&params, &submission));
+    assert!(!j.verdict);
+    assert_eq!(j.submission_hash, journal::sha256(&submission));
+}
+
+#[test]
 fn proves_verdict_false_for_corrupted_scheme() {
     let params = encode_market_params(49);
     let mut scheme = schemes::strassen_4x4_rank49();
