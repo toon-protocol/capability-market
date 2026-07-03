@@ -9,3 +9,9 @@ edition = "2021"
 risc0-zkvm = { version = "3.0", default-features = false, features = ["std"] }
 matmul = { path = "../.." }
 journal = { path = "../../../journal" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
