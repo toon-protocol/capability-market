@@ -6,5 +6,6 @@ description = "Differential-testing divergence predicate for the TOON capability
 license = "MIT"
 
 [dependencies]
-# Intentionally dependency-free: the shared journal crate (serde) and RISC
+# Deliberately dependency-light: only the shared journal envelope crate. RISC
 # Zero guest deps arrive with the toolchain wiring; see README.
+journal = { path = "../journal" }

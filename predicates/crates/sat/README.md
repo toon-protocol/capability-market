@@ -36,7 +36,7 @@ Size ceilings (`MAX_VARS = 1024`, `MAX_CLAUSES = 4096`) are pinned in the predic
 
 ## Guest wiring
 
-This crate is a pure-Rust, host-testable library (`cargo test -p sat`). The RISC Zero guest `main.rs` wiring — `env::read()` of manifest inputs, `verdict()` call, `env::commit_slice(&journal.encode())` of the 97-byte journal-v1 encoding (never serde `env::commit()` — the contract digests the raw bytes) — follows the `template` crate once `feat/risc0-toolchain-matmul` merges. The `Journal` struct in `src/journal.rs` is a local copy of the toon-meta#121 envelope, to be replaced by the shared `journal` crate (see `TODO(dedup)` marker).
+This crate is a pure-Rust, host-testable library (`cargo test -p sat`). The RISC Zero guest `main.rs` wiring — `env::read()` of manifest inputs, `verdict()` call, `env::commit_slice(&journal.encode())` of the 97-byte journal-v1 encoding (never serde `env::commit()` — the contract digests the raw bytes) — follows the `template` crate once `feat/risc0-toolchain-matmul` merges. The `Journal` struct comes from the shared `journal` crate (`predicates/crates/journal`, the toon-meta#121 envelope), re-exported as `sat::journal`.
 
 ## Follow-up before any market opens
 
