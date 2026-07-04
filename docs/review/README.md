@@ -110,6 +110,11 @@ What this means concretely:
 All three predicates share one envelope, so review each predicate's *logic* but
 review the binding **once, here**.
 
+> **Normative spec:** the authoritative envelope specification lives at
+> [`toon-meta/docs/predicate-envelope.md`](https://github.com/toon-protocol/toon-meta/blob/main/docs/predicate-envelope.md)
+> (journal-v1, manifest-v1, eligibility, reveal sequence). The crate module docs
+> cited below are the implementation; the toon-meta doc is the source of truth.
+
 ### Journal (`predicates/crates/journal`, `journal-v1`)
 
 Every guest commits exactly one 97-byte journal via
@@ -163,7 +168,9 @@ the guest, so they must agree byte-for-byte.
   `submission` SLOT.
 - Golden vectors: `predicates/crates/manifest/tests/golden_manifest_vectors.json`.
 
-### One cross-cutting note reviewers must carry (raised in PR #3 review, still open)
+### One cross-cutting note reviewers must carry (design property to confirm)
+
+*(The `marketParamsHash` preimage question this note grew out of — capability-market#4 — is **resolved and closed**: the guest hashes the manifest bytes, and the on-chain binding was verified end-to-end on devnet. What remains is a property for the predicate reviewer to confirm, below.)*
 
 The verdict every launch guest commits is **time-independent**: the guest hashes
 `frozen_clock` into `market_params_hash` (so the deadline is *pinned and
