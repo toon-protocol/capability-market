@@ -6,6 +6,8 @@ description = "Differential-testing divergence predicate for the TOON capability
 license = "MIT"
 
 [dependencies]
-# Deliberately dependency-light: only the shared journal envelope crate. RISC
-# Zero guest deps arrive with the toolchain wiring; see README.
+# Deliberately dependency-light: the shared journal envelope crate and the
+# canonical input-manifest crate (both guest-parseable, sha2-only). RISC Zero
+# guest deps arrive with the toolchain wiring; see README.
 journal = { path = "../journal" }
+manifest = { path = "../manifest" }

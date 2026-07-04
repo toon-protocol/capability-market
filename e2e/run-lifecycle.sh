@@ -116,6 +116,15 @@ jproof() { node -p "require('./$OUT/proof-$1.json').$2"; }
 [ "$(jproof groth16 image_id)" = "$IMAGE_ID" ] || { echo "groth16 proof image_id mismatch vs ARTIFACTS.json"; exit 1; }
 SOL_HASH=$(jproof dev solution_hash)
 PARAMS_HASH=$(jproof dev market_params_hash)
+# Input-manifest binding (toon-meta#121 / capability-market#4): the committed
+# market_params_hash MUST be sha256(canonical manifest bytes), NOT sha256(raw
+# params). The prover emits both; assert they agree before anything is minted.
+MANIFEST_SHA256=$(jproof dev manifest_sha256)
+if [ "$MANIFEST_SHA256" != "$PARAMS_HASH" ]; then
+  echo "MANIFEST BINDING BROKEN: market_params_hash=$PARAMS_HASH != sha256(manifest)=$MANIFEST_SHA256"; exit 1
+fi
+record MANIFEST_SHA256 "$MANIFEST_SHA256"
+record PARAMS_HASH_IS_SHA256_MANIFEST "OK $PARAMS_HASH"
 JOURNAL=$(jproof dev journal_hex)          # identical journal bytes in both proofs
 SEAL_DEV=$(jproof dev seal_hex)
 SEAL_GROTH16=$(jproof groth16 seal_hex)
@@ -146,6 +155,12 @@ create_market() {
       'createMarket(bytes32,bytes32,bytes32,uint256,uint256,uint256,uint256,uint256)' \
       "$IMAGE_ID" "$ARWEAVE_TX" "$PARAMS_HASH" "$deadline" "$5" "$lock" "$6" "$SEED")
   eval "${label}_ID=$id ${label}_LOCK=$lock ${label}_DEADLINE=$deadline ${label}_GRACE=$5"
+  # On-chain manifest binding: the market's committed marketParamsHash (4th
+  # field of the Market struct) MUST equal sha256(manifest bytes).
+  local onchain_mph
+  onchain_mph=$(cast call "$maddr" 'getMarket(uint256)((address,bytes32,bytes32,bytes32,uint256,uint256,uint256,uint256,uint256,uint256,uint8,address,uint256))' "$id" --rpc-url "$RPC" \
+    | sed 's/[()]//g' | cut -d',' -f4 | tr -d ' ')
+  assert_eq "${label}_MARKETPARAMSHASH_IS_SHA256_MANIFEST" "$MANIFEST_SHA256" "$onchain_mph"
   record "${label}_MARKET" "$maddr"
   record "${label}_ID" "$id"
   record "${label}_WINDOWS" "lock=$lock deadline=$deadline grace=$5 bountyBps=$6"

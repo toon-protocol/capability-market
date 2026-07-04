@@ -203,6 +203,84 @@ pub fn decode_assignment(bytes: &[u8]) -> Result<Vec<bool>, Malformed> {
         .collect()
 }
 
+/// Encode an [`Instance`] to its canonical byte form (the inverse of
+/// [`decode_instance`]): `num_vars: u32 LE | num_clauses: u32 LE | clauses`.
+/// These are the bytes content-addressed as the manifest's `instance` entry.
+pub fn encode_instance(instance: &Instance) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&instance.num_vars.to_le_bytes());
+    out.extend_from_slice(&(instance.clauses.len() as u32).to_le_bytes());
+    for clause in &instance.clauses {
+        for &literal in clause {
+            out.extend_from_slice(&literal.to_le_bytes());
+        }
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// Input-manifest layer (toon-meta#121, resolves capability-market#4)
+// ---------------------------------------------------------------------------
+//
+// `marketParamsHash = sha256(canonical manifest bytes)`. The guest reads
+// `(image_id, manifest_bytes, submission)`: it extracts the pinned 3-SAT
+// `instance` bytes from the manifest by name and commits
+// `sha256(manifest_bytes)` as `market_params_hash`. The instance is embedded
+// as a literal VALUE so the guest needs no side-channel input.
+
+/// Manifest entry name carrying the canonical [`encode_instance`] bytes.
+pub const MANIFEST_INSTANCE: &str = "instance";
+/// Manifest entry name for the deadline literal (audit only; the verdict is
+/// time-independent).
+pub const MANIFEST_FROZEN_CLOCK: &str = "frozen_clock";
+/// Manifest entry name for the late-bound submission slot (the assignment).
+pub const MANIFEST_SUBMISSION: &str = "submission";
+
+/// Build the canonical sat input manifest: the pinned instance as an
+/// `instance` VALUE, the deadline as a `frozen_clock` VALUE, and the
+/// late-bound `submission` SLOT. `sha256` of the bytes is `marketParamsHash`.
+pub fn encode_manifest(instance: &Instance, frozen_clock: u64) -> Vec<u8> {
+    manifest::encode(&[
+        manifest::Entry::value(MANIFEST_INSTANCE, encode_instance(instance)),
+        manifest::Entry::value(MANIFEST_FROZEN_CLOCK, frozen_clock.to_le_bytes().to_vec()),
+        manifest::Entry::slot(MANIFEST_SUBMISSION),
+    ])
+    .expect("static sat manifest is always canonical")
+}
+
+/// Manifest-driven check: parse the manifest, extract + decode the `instance`,
+/// decode the submission as the claimed assignment, and run the unchanged
+/// [`verdict`]. Any parse/decode failure is `false`, never a panic.
+pub fn check_manifest(manifest_bytes: &[u8], submission: &[u8]) -> bool {
+    let Ok(m) = manifest::parse(manifest_bytes) else {
+        return false;
+    };
+    let Some(instance_bytes) = m.value(MANIFEST_INSTANCE) else {
+        return false;
+    };
+    let Ok(instance) = decode_instance(instance_bytes) else {
+        return false;
+    };
+    let Ok(assignment) = decode_assignment(submission) else {
+        return false;
+    };
+    verdict(&instance, &assignment)
+}
+
+/// Full guest computation, host-callable for tests: judge the submission
+/// against the manifest and assemble the canonical journal exactly as the
+/// guest commits it (`market_params_hash = sha256(manifest_bytes)`).
+pub fn evaluate(image_id: [u8; 32], manifest_bytes: &[u8], submission: &[u8]) -> journal::Journal {
+    let verdict = check_manifest(manifest_bytes, submission);
+    journal::predicate_journal(image_id, manifest_bytes, submission, verdict)
+}
+
+/// Encode a claimed assignment to canonical submission bytes (one `0x00`/`0x01`
+/// byte per variable; inverse of [`decode_assignment`]).
+pub fn encode_assignment(assignment: &[bool]) -> Vec<u8> {
+    assignment.iter().map(|&b| b as u8).collect()
+}
+
 // ---------------------------------------------------------------------------
 // Pinned launch fixture.
 // ---------------------------------------------------------------------------
@@ -343,18 +421,6 @@ mod tests {
 
     // -- canonical encoding round-trips ------------------------------------
 
-    fn encode_instance(instance: &Instance) -> Vec<u8> {
-        let mut out = Vec::new();
-        out.extend_from_slice(&instance.num_vars.to_le_bytes());
-        out.extend_from_slice(&(instance.clauses.len() as u32).to_le_bytes());
-        for clause in &instance.clauses {
-            for &literal in clause {
-                out.extend_from_slice(&literal.to_le_bytes());
-            }
-        }
-        out
-    }
-
     #[test]
     fn decode_pinned_instance_round_trip() {
         let instance = pinned_instance();
@@ -398,5 +464,39 @@ mod tests {
             verdict: true,
         };
         assert!(j.verdict);
+    }
+
+    // -- input-manifest layer (toon-meta#121 / capability-market#4) ---------
+
+    #[test]
+    fn evaluate_binds_manifest_hash_not_raw_params() {
+        let manifest_bytes = encode_manifest(&pinned_instance(), 1_735_689_600);
+        let submission = encode_assignment(&satisfying_assignment());
+        let j = evaluate([5u8; 32], &manifest_bytes, &submission);
+        assert!(j.verdict);
+        assert_eq!(j.market_params_hash, journal::sha256(&manifest_bytes));
+        assert_ne!(
+            j.market_params_hash,
+            journal::sha256(&encode_instance(&pinned_instance())),
+            "must bind the manifest, not the raw instance bytes"
+        );
+        assert_eq!(j.submission_hash, journal::sha256(&submission));
+    }
+
+    #[test]
+    fn check_manifest_extracts_instance_by_name() {
+        let m = encode_manifest(&pinned_instance(), 0);
+        assert!(check_manifest(&m, &encode_assignment(&satisfying_assignment())));
+        // Wrong assignment (falsifies a clause) is verdict-false.
+        assert!(!check_manifest(&m, &encode_assignment(&[true, true, true, false])));
+    }
+
+    #[test]
+    fn malformed_manifest_is_false_not_panic() {
+        let sub = encode_assignment(&satisfying_assignment());
+        assert!(!check_manifest(b"", &sub));
+        assert!(!check_manifest(b"garbage", &sub));
+        let no_instance = manifest::encode(&[manifest::Entry::slot("submission")]).unwrap();
+        assert!(!check_manifest(&no_instance, &sub));
     }
 }

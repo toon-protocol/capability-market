@@ -1756,6 +1756,7 @@ name = "difftest"
 version = "0.1.0"
 dependencies = [
  "journal",
+ "manifest",
 ]
 
 [[package]]
@@ -2900,11 +2901,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "manifest"
+version = "0.1.0"
+dependencies = [
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "matmul"
 version = "0.1.0"
 dependencies = [
  "hex",
  "journal",
+ "manifest",
  "matmul-methods",
  "risc0-zkvm",
 ]
@@ -4125,6 +4137,7 @@ name = "sat"
 version = "0.1.0"
 dependencies = [
  "journal",
+ "manifest",
 ]
 
 [[package]]
@@ -4576,6 +4589,7 @@ dependencies = [
  "flate2",
  "hex",
  "journal",
+ "manifest",
  "risc0-binfmt",
  "risc0-zkvm",
  "template-methods",
