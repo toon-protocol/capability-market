@@ -25,16 +25,26 @@
 //!
 //! # Contract with the rest of the system
 //!
-//! - `market_params` and `submission` arrive as **raw bytes**; the journal
-//!   commits `sha256` of those exact bytes ([`journal::predicate_journal`]),
-//!   so parse errors must yield `verdict: false`, never a panic — a panicking
-//!   guest cannot produce the `false` proof a challenger may need.
+//! - The guest reads `(image_id, manifest_bytes, submission)`. `manifest_bytes`
+//!   is the canonical input manifest (see the [`manifest`] crate); the journal
+//!   commits `market_params_hash = sha256(manifest_bytes)`
+//!   ([`journal::predicate_journal`]) — the capability-market#4 decision, NOT
+//!   `sha256(raw params)`. Predicate parameters are extracted from the manifest
+//!   by name; parse errors must yield `verdict: false`, never a panic — a
+//!   panicking guest cannot produce the `false` proof a challenger may need.
+//! - `submission` arrives as raw bytes; the journal commits `sha256(submission)`.
 //! - `image_id` is a guest *input* committed verbatim: a guest cannot hash
 //!   itself. On-chain, the RISC Zero verifier binds the seal to the market's
 //!   pinned image ID, and the contract additionally requires
 //!   `journal.imageId == market.imageId`.
 
 use journal::Journal;
+
+/// Manifest entry name carrying this example predicate's `market_params` (the
+/// 32-byte sha256 target). Real predicates pick names for their own params.
+pub const MANIFEST_MARKET_PARAMS: &str = "market_params";
+/// Manifest entry name for the late-bound submission slot.
+pub const MANIFEST_SUBMISSION: &str = "submission";
 
 /// The predicate: raw market-params and submission bytes in, verdict out.
 ///
@@ -49,12 +59,38 @@ pub fn check(market_params: &[u8], submission: &[u8]) -> bool {
     &journal::sha256(submission) == target
 }
 
-/// The full guest computation, host-callable for tests: judge the raw bytes
-/// and assemble the journal exactly as the guest commits it. Predicates
-/// normally keep this function as-is.
-pub fn evaluate(image_id: [u8; 32], market_params: &[u8], submission: &[u8]) -> Journal {
-    let verdict = check(market_params, submission);
-    journal::predicate_journal(image_id, market_params, submission, verdict)
+/// Build this example predicate's canonical input manifest: the 32-byte
+/// sha256 target as a `market_params` VALUE plus the late-bound `submission`
+/// SLOT. `sha256` of the bytes is the market's `marketParamsHash`. Real
+/// predicates author their own manifest schema (see `crates/matmul`).
+pub fn encode_manifest(market_params: &[u8]) -> Vec<u8> {
+    manifest::encode(&[
+        manifest::Entry::value(MANIFEST_MARKET_PARAMS, market_params.to_vec()),
+        manifest::Entry::slot(MANIFEST_SUBMISSION),
+    ])
+    .expect("static template manifest is always canonical")
+}
+
+/// Manifest-driven check: parse the manifest, extract `market_params` by name,
+/// and run [`check`]. A manifest that fails to parse or lacks the entry is
+/// verdict-`false` (never a panic).
+pub fn check_manifest(manifest_bytes: &[u8], submission: &[u8]) -> bool {
+    let Ok(m) = manifest::parse(manifest_bytes) else {
+        return false;
+    };
+    let Some(market_params) = m.value(MANIFEST_MARKET_PARAMS) else {
+        return false;
+    };
+    check(market_params, submission)
+}
+
+/// The full guest computation, host-callable for tests: judge the submission
+/// against the manifest and assemble the journal exactly as the guest commits
+/// it (`market_params_hash = sha256(manifest_bytes)`). Predicates normally
+/// keep this function as-is.
+pub fn evaluate(image_id: [u8; 32], manifest_bytes: &[u8], submission: &[u8]) -> Journal {
+    let verdict = check_manifest(manifest_bytes, submission);
+    journal::predicate_journal(image_id, manifest_bytes, submission, verdict)
 }
 
 #[cfg(test)]
@@ -82,14 +118,26 @@ mod tests {
     }
 
     #[test]
-    fn evaluate_commits_hashes_of_raw_bytes() {
+    fn evaluate_binds_manifest_hash() {
         let submission = b"the witness".to_vec();
         let params = journal::sha256(&submission);
+        let manifest_bytes = encode_manifest(&params);
         let image_id = [9u8; 32];
-        let j = evaluate(image_id, &params, &submission);
+        let j = evaluate(image_id, &manifest_bytes, &submission);
         assert!(j.verdict);
         assert_eq!(j.image_id, image_id);
-        assert_eq!(j.market_params_hash, journal::sha256(&params));
+        // marketParamsHash binds the manifest bytes (capability-market#4).
+        assert_eq!(j.market_params_hash, journal::sha256(&manifest_bytes));
+        assert_ne!(j.market_params_hash, journal::sha256(&params));
         assert_eq!(j.submission_hash, journal::sha256(&submission));
+    }
+
+    #[test]
+    fn check_manifest_round_trip() {
+        let submission = b"the witness".to_vec();
+        let m = encode_manifest(&journal::sha256(&submission));
+        assert!(check_manifest(&m, &submission));
+        assert!(!check_manifest(&m, b"wrong witness"));
+        assert!(!check_manifest(b"not a manifest", &submission));
     }
 }

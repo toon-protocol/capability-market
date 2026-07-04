@@ -1,13 +1,22 @@
 {
   "predicate": "matmul",
-  "image_id": "660d47e33136b07e362d5efac8669ee3d31603df5aa5c12dba41f91156e8ecff",
-  "elf_sha256": "f931359cf2b3aa7a31992e91811d1428d8a407040a57c1172c000759f094557d",
-  "elf_bytes": 175880,
-  "elf_gzip_bytes": 88048,
+  "image_id": "80db88cd4190c8adf12b58c2aca51812b7a3ca82fa04a0a61c8f91b9dc9985b2",
+  "elf_sha256": "ea087289e12f06e43889942608af12baba95a2457769f035c1a9707685ac5e2f",
+  "elf_bytes": 178032,
+  "elf_gzip_bytes": 89268,
   "built_with": {
     "cargo_risczero": "3.0.5",
     "risc0_zkvm": "3.0.5",
     "docker_image": "risczero/risc0-guest-builder:r0.1.88.0"
   },
-  "arweave_tx": "62uFTWV3AJFYdz1C4JFf2wye98r4VC3t-bhpdHWEbfw"
+  "arweave_tx": "KRYHACfle56dsRYuEMXodlvpMSvpz2FCv1ApzxnWmzU",
+  "input_manifest": {
+    "note": "marketParamsHash = sha256(canonical manifest-v1 bytes), NOT sha256(raw params) — resolves capability-market#4 per toon-meta#121. See docs/predicate-envelope.md §2 and predicates/crates/manifest.",
+    "example": "matmul flagship (rank_bound=46, frozen_clock=1735689600)",
+    "rank_bound": 46,
+    "frozen_clock": 1735689600,
+    "manifest_bytes_hex": "544d46310300020c0066726f7a656e5f636c6f636b080000008085746700000000020d006d61726b65745f706172616d7320000000000000000000000000000000000000000000000000000000000000000000002e030a007375626d697373696f6e00000000",
+    "manifest_sha256": "0a029dce586c51f082c6b7e654926602e0602a3b32f7b3d11e9dd6c4cfa6ee0e",
+    "manifest_arweave_tx": "J2Ie4J5K6cYifr1oaKWckFA6bnVE356UEKGkCW5TS8g"
+  }
 }

@@ -31,6 +31,18 @@
 //! rejected as malformed). The flagship market pins
 //! [`FLAGSHIP_RANK_BOUND`] = 46.
 //!
+//! # Input manifest (`marketParamsHash` binding, toon-meta#121)
+//!
+//! The rank bound is not fed to the guest raw. It is embedded as the
+//! `market_params` VALUE entry of a canonical [`manifest`] (`manifest-v1`),
+//! alongside the `frozen_clock` deadline literal and the late-bound
+//! `submission` SLOT. The guest reads `(image_id, manifest_bytes, submission)`
+//! and commits `market_params_hash = sha256(manifest_bytes)` — resolving
+//! capability-market#4 in favour of the manifest, NOT `sha256(raw params)`.
+//! Build the manifest with [`encode_manifest`]; the core verifier ([`check`],
+//! [`verify_scheme`]) is unchanged and still operates on the raw 32-byte
+//! `market_params` bytes extracted from the manifest by name.
+//!
 //! # What the verifier rejects
 //!
 //! Beyond polynomial-identity failure and rank overrun, structurally
@@ -199,9 +211,10 @@ pub fn encode_market_params(bound: u32) -> [u8; 32] {
     out
 }
 
-/// The predicate entry point the guest calls: raw bytes in, verdict out.
-/// Any malformation or rejection is `false` — the proof then attests that
-/// this submission does NOT satisfy the proposition.
+/// The core verifier entry point: raw `market_params` and `submission` bytes
+/// in, verdict out. Any malformation or rejection is `false` — the proof then
+/// attests that this submission does NOT satisfy the proposition. This is the
+/// unchanged, money-critical logic; the manifest layer below only feeds it.
 pub fn check(market_params: &[u8], submission: &[u8]) -> bool {
     let Ok(bound) = decode_market_params(market_params) else {
         return false;
@@ -212,11 +225,60 @@ pub fn check(market_params: &[u8], submission: &[u8]) -> bool {
     verify_scheme(&triples, bound).is_ok()
 }
 
-/// Full guest computation, host-callable for tests: parse nothing, judge the
-/// raw bytes, and assemble the journal exactly as the guest commits it.
-pub fn evaluate(image_id: [u8; 32], market_params: &[u8], submission: &[u8]) -> Journal {
-    let verdict = check(market_params, submission);
-    journal::predicate_journal(image_id, market_params, submission, verdict)
+// ---------------------------------------------------------------------------
+// Input-manifest layer (toon-meta#121, resolves capability-market#4)
+// ---------------------------------------------------------------------------
+//
+// `marketParamsHash = sha256(canonical manifest bytes)`, NOT sha256(raw
+// params). The guest reads `(image_id, manifest_bytes, submission)`: it parses
+// the manifest, extracts the rank bound from the `market_params` VALUE entry,
+// and commits `sha256(manifest_bytes)` as the journal's `market_params_hash`.
+// The rank bound is embedded as a literal VALUE (32-byte `matmul-market-params-v1`
+// bytes) so the guest needs no side-channel input beyond the three above.
+
+/// Manifest entry name carrying the `matmul-market-params-v1` rank-bound bytes.
+pub const MANIFEST_MARKET_PARAMS: &str = "market_params";
+/// Manifest entry name for the deadline pinned as literal data (audit only:
+/// the launch verdict is time-independent, so the guest hashes it via the
+/// manifest but does not act on it).
+pub const MANIFEST_FROZEN_CLOCK: &str = "frozen_clock";
+/// Manifest entry name for the late-bound submission slot.
+pub const MANIFEST_SUBMISSION: &str = "submission";
+
+/// Build the canonical matmul input manifest for a market: the rank bound as a
+/// `market_params` VALUE, the deadline as a `frozen_clock` VALUE, and the
+/// late-bound `submission` SLOT. `sha256` of the returned bytes is the
+/// market's `marketParamsHash`.
+pub fn encode_manifest(rank_bound: u32, frozen_clock: u64) -> Vec<u8> {
+    manifest::encode(&[
+        manifest::Entry::value(MANIFEST_MARKET_PARAMS, encode_market_params(rank_bound).to_vec()),
+        manifest::Entry::value(MANIFEST_FROZEN_CLOCK, frozen_clock.to_le_bytes().to_vec()),
+        manifest::Entry::slot(MANIFEST_SUBMISSION),
+    ])
+    .expect("static matmul manifest is always canonical")
+}
+
+/// Manifest-driven check: parse the manifest, extract the `market_params`
+/// value by name, and run the unchanged [`check`] over it. A manifest that
+/// fails to parse, or is missing the `market_params` value, is verdict-`false`
+/// (never a panic) — same total-function contract as the raw-bytes path.
+pub fn check_manifest(manifest_bytes: &[u8], submission: &[u8]) -> bool {
+    let Ok(m) = manifest::parse(manifest_bytes) else {
+        return false;
+    };
+    let Some(market_params) = m.value(MANIFEST_MARKET_PARAMS) else {
+        return false;
+    };
+    check(market_params, submission)
+}
+
+/// Full guest computation, host-callable for tests: judge the submission
+/// against the manifest and assemble the journal exactly as the guest commits
+/// it. `market_params_hash = sha256(manifest_bytes)` (the #4 decision);
+/// `submission_hash = sha256(submission)`.
+pub fn evaluate(image_id: [u8; 32], manifest_bytes: &[u8], submission: &[u8]) -> Journal {
+    let verdict = check_manifest(manifest_bytes, submission);
+    journal::predicate_journal(image_id, manifest_bytes, submission, verdict)
 }
 
 /// Reference schemes for tests and adversarial review (NOT witnesses for the
@@ -480,15 +542,52 @@ mod tests {
     }
 
     #[test]
-    fn evaluate_builds_canonical_journal() {
+    fn evaluate_builds_canonical_journal_from_manifest() {
         let image_id = [7u8; 32];
-        let params = encode_market_params(49);
+        let manifest_bytes = encode_manifest(49, 1_735_689_600);
         let sub = encode_scheme(&strassen_4x4_rank49());
-        let j = evaluate(image_id, &params, &sub);
+        let j = evaluate(image_id, &manifest_bytes, &sub);
         assert!(j.verdict);
         assert_eq!(j.image_id, image_id);
-        assert_eq!(j.market_params_hash, journal::sha256(&params));
+        // marketParamsHash binds the MANIFEST bytes, not the raw params.
+        assert_eq!(j.market_params_hash, journal::sha256(&manifest_bytes));
+        assert_ne!(
+            j.market_params_hash,
+            journal::sha256(&encode_market_params(49)),
+            "must NOT be sha256(raw params) — that was the rejected #4 fork"
+        );
         assert_eq!(j.submission_hash, journal::sha256(&sub));
         assert_eq!(j.encode().len(), journal::ENCODED_LEN);
+    }
+
+    #[test]
+    fn check_manifest_extracts_bound_by_name() {
+        let sub49 = encode_scheme(&strassen_4x4_rank49());
+        // Bound 49 accepts the rank-49 scheme; flagship bound 46 rejects it.
+        assert!(check_manifest(&encode_manifest(49, 0), &sub49));
+        assert!(!check_manifest(&encode_manifest(46, 0), &sub49));
+    }
+
+    #[test]
+    fn wrong_manifest_yields_wrong_params_hash() {
+        // Same submission + verdict, different manifest ⇒ different journal
+        // (different market_params_hash). This is the on-chain binding that a
+        // reveal against the wrong market fails.
+        let sub = encode_scheme(&strassen_4x4_rank49());
+        let a = evaluate([0u8; 32], &encode_manifest(49, 1000), &sub);
+        let b = evaluate([0u8; 32], &encode_manifest(49, 2000), &sub); // different clock
+        assert_eq!(a.verdict, b.verdict);
+        assert_ne!(a.market_params_hash, b.market_params_hash);
+        assert_ne!(a.encode(), b.encode());
+    }
+
+    #[test]
+    fn malformed_manifest_is_false_not_panic() {
+        let sub = encode_scheme(&strassen_4x4_rank49());
+        assert!(!check_manifest(b"", &sub));
+        assert!(!check_manifest(b"not a manifest", &sub));
+        // A manifest missing the market_params entry is verdict-false.
+        let no_params = manifest::encode(&[manifest::Entry::slot("submission")]).unwrap();
+        assert!(!check_manifest(&no_params, &sub));
     }
 }

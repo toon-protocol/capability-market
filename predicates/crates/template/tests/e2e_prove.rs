@@ -10,12 +10,12 @@ fn image_id_bytes() -> [u8; 32] {
     *Digest::from(TEMPLATE_GUEST_ID).as_ref()
 }
 
-fn dev_prove(market_params: &[u8], submission: &[u8]) -> Receipt {
+fn dev_prove(manifest_bytes: &[u8], submission: &[u8]) -> Receipt {
     std::env::set_var("RISC0_DEV_MODE", "1");
     let env = ExecutorEnv::builder()
         .write(&image_id_bytes())
         .unwrap()
-        .write(&market_params.to_vec())
+        .write(&manifest_bytes.to_vec())
         .unwrap()
         .write(&submission.to_vec())
         .unwrap()
@@ -33,25 +33,27 @@ fn dev_prove(market_params: &[u8], submission: &[u8]) -> Receipt {
 fn template_guest_commits_canonical_journal() {
     let submission = b"the witness".to_vec();
     let params = journal::sha256(&submission); // preimage predicate: target digest
+    let manifest_bytes = template::encode_manifest(&params);
 
-    let receipt = dev_prove(&params, &submission);
+    let receipt = dev_prove(&manifest_bytes, &submission);
     let bytes = &receipt.journal.bytes;
     assert_eq!(bytes.len(), journal::ENCODED_LEN);
     let j = Journal::decode(bytes).unwrap();
     assert!(j.verdict);
     assert_eq!(j.image_id, image_id_bytes());
-    assert_eq!(j.market_params_hash, journal::sha256(&params));
+    // marketParamsHash binds the manifest bytes (capability-market#4).
+    assert_eq!(j.market_params_hash, journal::sha256(&manifest_bytes));
     assert_eq!(j.submission_hash, journal::sha256(&submission));
     assert_eq!(journal::sha256(bytes), j.digest());
 
     // Host-side evaluate() must agree byte-for-byte with the guest.
-    let host = template::evaluate(image_id_bytes(), &params, &submission);
+    let host = template::evaluate(image_id_bytes(), &manifest_bytes, &submission);
     assert_eq!(host.encode().as_slice(), bytes.as_slice());
 }
 
 #[test]
 fn template_guest_verdict_false_for_wrong_witness() {
-    let params = journal::sha256(b"the witness");
-    let j = Journal::decode(&dev_prove(&params, b"wrong").journal.bytes).unwrap();
+    let manifest_bytes = template::encode_manifest(&journal::sha256(b"the witness"));
+    let j = Journal::decode(&dev_prove(&manifest_bytes, b"wrong").journal.bytes).unwrap();
     assert!(!j.verdict);
 }
