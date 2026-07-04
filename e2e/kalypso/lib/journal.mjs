@@ -7,11 +7,12 @@
 //
 // Layout (97 bytes, tightly packed):
 //   [0..32)  image_id            — opaque 32-byte digest, copied verbatim
-//   [32..64) market_params_hash  — sha256(market_params)
+//   [32..64) market_params_hash  — sha256(canonical manifest-v1 bytes), NOT
+//                                  sha256(raw params) (toon-meta#121 / capability-market#4)
 //   [64..96) submission_hash     — sha256(submission)
 //   [96]     verdict             — 0x00 false / 0x01 true
 //
-// The journal is fully DETERMINED by (image_id, market_params, submission,
+// The journal is fully DETERMINED by (image_id, manifest_bytes, submission,
 // verdict). That determinism is the load-bearing property for the Kalypso path:
 // a marketplace prover only needs to return the risc0 seal; we can regenerate the
 // journal locally and the seal binds to sha256(journal). Verified against
@@ -34,16 +35,18 @@ function as32(name, buf) {
 
 /**
  * Assemble the canonical journal the guest commits.
- * @param {Buffer} imageId       32-byte RISC Zero image ID.
- * @param {Buffer} marketParams  raw market-params bytes (hashed here).
- * @param {Buffer} submission    raw submission bytes (hashed here).
- * @param {boolean} verdict      predicate verdict.
+ * @param {Buffer} imageId        32-byte RISC Zero image ID.
+ * @param {Buffer} manifestBytes  canonical manifest-v1 bytes (hashed here) —
+ *                                market_params_hash = sha256(manifest), the
+ *                                toon-meta#121 binding, NOT sha256(raw params).
+ * @param {Buffer} submission     raw submission bytes (hashed here).
+ * @param {boolean} verdict       predicate verdict.
  * @returns {{imageId:Buffer, marketParamsHash:Buffer, submissionHash:Buffer, verdict:boolean}}
  */
-export function predicateJournal(imageId, marketParams, submission, verdict) {
+export function predicateJournal(imageId, manifestBytes, submission, verdict) {
   return {
     imageId: as32("image_id", imageId),
-    marketParamsHash: sha256(marketParams),
+    marketParamsHash: sha256(manifestBytes),
     submissionHash: sha256(submission),
     verdict: !!verdict,
   };

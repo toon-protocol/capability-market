@@ -82,7 +82,7 @@ Kalypso pairs **every (circuit, payment-token) into its own market**. To let
 miners outsource proofs for our matmul predicate:
 
 1. **Register the market** — `KalypsoSdk.MarketPlace().createPublicMarket(marketMetaData, verifier, slashingPenalty, ivsPcrs)`.
-   - `marketMetaData` pins our RISC Zero **image ID** `0x660d47e33136b07e362d5efac8669ee3d31603df5aa5c12dba41f91156e8ecff`
+   - `marketMetaData` pins our RISC Zero **image ID** `0x80db88cd4190c8adf12b58c2aca51812b7a3ca82fa04a0a61c8f91b9dc9985b2`
      (`predicates/ARTIFACTS.json`).
    - `verifier` is a risc0 Groth16 verifier the prover network honors, producing
      a seal our `RiscZeroGroth16Verifier` (`deployments/devnet.json`,
@@ -119,12 +119,18 @@ not by trusting the prover.
 
 ## Journal reconstruction (why outsourcing is safe & cheap)
 
-The canonical journal is **fully determined** by `(image_id, market_params,
-submission, verdict)` — see `lib/journal.mjs`. So a Kalypso prover only needs to
+The canonical journal is **fully determined** by `(image_id, manifest_bytes,
+submission, verdict)` — see `lib/journal.mjs`. Per toon-meta#121 /
+capability-market#4 the journal's `market_params_hash` is
+**`sha256(canonical manifest-v1 bytes)`**, NOT `sha256(raw params)`: the rank
+bound rides as the `market_params` VALUE entry of a `manifest-v1` TLV
+(authority: `predicates/crates/manifest`), alongside the `frozen_clock` literal
+and the late-bound `submission` SLOT. So a Kalypso prover only needs to
 return the **seal**; we reconstruct the exact 97 journal bytes locally and the
 seal binds to `sha256(journal)`. `test/self-check.mjs` proves our JS
-reconstruction is **byte-identical** to what the guest commits (golden vector =
-`e2e-prover --mode dev` output over the canonical guest). A prover cannot lie
+reconstruction is **byte-identical** to what the guest commits — including a
+byte-for-byte cross-check of the `manifest-v1` encoder against the Rust
+`manifest` crate for rank bounds 46 and 49. A prover cannot lie
 about the journal: `CapabilityMarket.reveal` re-derives `sha256(journal)`,
 enforces `journal.imageId == market.imageId`, and checks the verdict.
 
@@ -151,7 +157,7 @@ enforces `journal.imageId == market.imageId`, and checks the verdict.
      enclave URL**. The `kalypso-sdk` repo ships no testnet address book; these come
      from a live Marlin deployment.
   2. **No market exists for our image ID** — someone must `createMarket` pairing
-     `0x660d47e3…` with USDC and pay `MARKET_CREATION_COST`.
+     `0x80db88cd…` with USDC and pay `MARKET_CREATION_COST`.
   3. **No staked prover runs our guest** — the permissionless network doesn't
      auto-support an arbitrary custom RISC Zero guest; a generator must register
      with our ELF, stake, and come online. Without one, an ask is never matched.

@@ -27,7 +27,7 @@ import { LocalProver, KalypsoProver, KalypsoUnavailable } from "./lib/providers.
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..");            // e2e/kalypso -> repo root
 const PREDICATES_DIR = resolve(REPO, "predicates");
-const IMAGE_ID = "660d47e33136b07e362d5efac8669ee3d31603df5aa5c12dba41f91156e8ecff"; // predicates/ARTIFACTS.json
+const IMAGE_ID = "80db88cd4190c8adf12b58c2aca51812b7a3ca82fa04a0a61c8f91b9dc9985b2"; // predicates/ARTIFACTS.json
 
 function parseArgs(argv) {
   const a = { source: "local", mode: "groth16", maxPriceUsdc: "500000", maxTime: 1800, rankBound: 49, elf: null };
@@ -82,7 +82,10 @@ async function main() {
   const elfPath = args.elf || resolve(HERE, "matmul-guest.elf");
   const req = {
     imageId: IMAGE_ID,
-    marketParams: KNOWN_WITNESS.marketParams,
+    // manifest-v1 bytes (toon-meta#121): the guest commits
+    // market_params_hash = sha256(manifest), so the reconstructed journal must
+    // hash the manifest, not the raw params.
+    manifest: KNOWN_WITNESS.manifest,
     submission: KNOWN_WITNESS.submission,
     maxPriceUsdc: args.maxPriceUsdc,
     maxTimeSeconds: args.maxTime,

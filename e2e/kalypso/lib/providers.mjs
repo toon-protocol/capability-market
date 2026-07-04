@@ -16,12 +16,13 @@
 //                    fall back to LocalProver.
 //
 // ProverProvider (structural interface):
-//   async requestProof({ imageId, marketParams, submission, maxPriceUsdc, maxTimeSeconds })
+//   async requestProof({ imageId, manifest, submission, maxPriceUsdc, maxTimeSeconds })
 //     -> { sealHex: "0x..", journalHex: "0x..", source: "local"|"kalypso", meta }
 //
-// The journal is DETERMINISTIC given (imageId, marketParams, submission, verdict),
+// The journal is DETERMINISTIC given (imageId, manifest_bytes, submission, verdict),
 // so both providers can hand back the identical 97-byte journal; only the seal
-// differs by prover. See lib/journal.mjs.
+// differs by prover. market_params_hash = sha256(manifest_bytes) (toon-meta#121).
+// See lib/journal.mjs.
 
 import { spawn } from "node:child_process";
 import { predicateJournal, encodeJournal } from "./journal.mjs";
@@ -97,7 +98,7 @@ export class KalypsoProver {
    * @param {string} cfg.privateKey          miner wallet key (USDC-funded).
    * @param {string} cfg.marketId            registered market id for our image ID.
    * @param {object} cfg.kalypsoConfig       KalspsoConfig (proof_market_place, entity_registry, payment_token=USDC, enclave endpoints…).
-   * @param {(id:Buffer,mp:Buffer,sub:Buffer,verdict:boolean)=>object} [cfg.reconstructJournal]
+   * @param {(id:Buffer,manifest:Buffer,sub:Buffer,verdict:boolean)=>object} [cfg.reconstructJournal]
    */
   constructor(cfg) {
     this.cfg = cfg;
@@ -114,7 +115,7 @@ export class KalypsoProver {
     return KalypsoProver.requiredConfig().every((k) => this.cfg && this.cfg[k]);
   }
 
-  async requestProof({ imageId, marketParams, submission, maxPriceUsdc, maxTimeSeconds }) {
+  async requestProof({ imageId, manifest, submission, maxPriceUsdc, maxTimeSeconds }) {
     if (!this.isConfigured()) {
       throw new KalypsoUnavailable(
         "Kalypso is not configured. Set KALYPSO_RPC_URL, KALYPSO_PRIVATE_KEY, KALYPSO_MARKET_ID and a KalspsoConfig " +
@@ -162,8 +163,9 @@ export class KalypsoProver {
     // Poll the marketplace until a staked prover fulfils the ask (or SLA deadline).
     const sealHex = await pollProof(market, askId, fromBlock, maxTimeSeconds ?? 3600);
 
-    // Reconstruct the deterministic 97-byte journal to pair with the outsourced seal.
-    const j = predicateJournal(Buffer.from(strip0x(imageId), "hex"), Buffer.from(marketParams), Buffer.from(submission), true);
+    // Reconstruct the deterministic 97-byte journal to pair with the outsourced
+    // seal. market_params_hash = sha256(manifest_bytes) (toon-meta#121).
+    const j = predicateJournal(Buffer.from(strip0x(imageId), "hex"), Buffer.from(manifest), Buffer.from(submission), true);
     return {
       sealHex,
       journalHex: hex(encodeJournal(j)),
