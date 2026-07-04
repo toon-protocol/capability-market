@@ -261,6 +261,84 @@ pub fn verdict(p1: &[u8], p2: &[u8], input_bytes: &[u8]) -> bool {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Input-manifest layer (toon-meta#121, resolves capability-market#4)
+// ---------------------------------------------------------------------------
+//
+// `marketParamsHash = sha256(canonical manifest bytes)`. The guest reads
+// `(image_id, manifest_bytes, submission)`: it extracts the two pinned program
+// blobs (and the declared step budget) from the manifest by name and commits
+// `sha256(manifest_bytes)` as `market_params_hash`. Both programs are embedded
+// as literal VALUE entries so the guest needs no side-channel input.
+
+/// Manifest entry name for the first pinned program blob P1.
+pub const MANIFEST_PROGRAM_1: &str = "program_1";
+/// Manifest entry name for the second pinned program blob P2.
+pub const MANIFEST_PROGRAM_2: &str = "program_2";
+/// Manifest entry name for the pinned step budget, declared as a `u64` LE
+/// literal for audit. The interpreter enforces the compiled-in [`MAX_STEPS`]
+/// (baked into the guest image); this entry MUST equal it, so the pinned
+/// proving-cost ceiling is visible in the market's frozen parameters.
+pub const MANIFEST_STEP_BUDGET: &str = "step_budget";
+/// Manifest entry name for the deadline literal (audit only; time-independent).
+pub const MANIFEST_FROZEN_CLOCK: &str = "frozen_clock";
+/// Manifest entry name for the late-bound submission slot (the claimed input).
+pub const MANIFEST_SUBMISSION: &str = "submission";
+
+/// Build the canonical difftest input manifest: the two program blobs as
+/// `program_1` / `program_2` VALUEs, the step budget and deadline as literal
+/// VALUEs, and the late-bound `submission` SLOT. `sha256` of the bytes is the
+/// market's `marketParamsHash`.
+pub fn encode_manifest(p1: &[u8], p2: &[u8], frozen_clock: u64) -> Vec<u8> {
+    manifest::encode(&[
+        manifest::Entry::value(MANIFEST_PROGRAM_1, p1.to_vec()),
+        manifest::Entry::value(MANIFEST_PROGRAM_2, p2.to_vec()),
+        manifest::Entry::value(MANIFEST_STEP_BUDGET, MAX_STEPS.to_le_bytes().to_vec()),
+        manifest::Entry::value(MANIFEST_FROZEN_CLOCK, frozen_clock.to_le_bytes().to_vec()),
+        manifest::Entry::slot(MANIFEST_SUBMISSION),
+    ])
+    .expect("static difftest manifest is always canonical")
+}
+
+/// Manifest-driven check: parse the manifest, extract the two programs (and
+/// verify the declared `step_budget` matches the compiled-in [`MAX_STEPS`]),
+/// then run the unchanged divergence [`verdict`] over the submission. Any
+/// parse/decode failure — or a step-budget declaration that does not match the
+/// pinned interpreter ceiling — is `false`, never a panic.
+pub fn check_manifest(manifest_bytes: &[u8], submission: &[u8]) -> bool {
+    let Ok(m) = manifest::parse(manifest_bytes) else {
+        return false;
+    };
+    let (Some(p1), Some(p2)) = (m.value(MANIFEST_PROGRAM_1), m.value(MANIFEST_PROGRAM_2)) else {
+        return false;
+    };
+    // The declared budget must match what the interpreter actually enforces,
+    // so the manifest cannot advertise a ceiling the guest does not honour.
+    match m.value(MANIFEST_STEP_BUDGET) {
+        Some(b) if b == MAX_STEPS.to_le_bytes() => {}
+        _ => return false,
+    }
+    verdict(p1, p2, submission)
+}
+
+/// Full guest computation, host-callable for tests: judge the submission
+/// against the manifest and assemble the canonical journal exactly as the
+/// guest commits it (`market_params_hash = sha256(manifest_bytes)`).
+pub fn evaluate(image_id: [u8; 32], manifest_bytes: &[u8], submission: &[u8]) -> journal::Journal {
+    let verdict = check_manifest(manifest_bytes, submission);
+    journal::predicate_journal(image_id, manifest_bytes, submission, verdict)
+}
+
+/// Encode a claimed input to canonical submission bytes (little-endian `u64`
+/// words; inverse of [`decode_input`]).
+pub fn encode_input(words: &[u64]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(words.len() * 8);
+    for &w in words {
+        out.extend_from_slice(&w.to_le_bytes());
+    }
+    out
+}
+
 /// Tiny assembler helpers for building fixture programs in tests and docs.
 pub mod asm {
     use super::op;
@@ -435,5 +513,57 @@ mod tests {
             verdict: false,
         };
         assert!(!j.verdict);
+    }
+
+    // -- input-manifest layer (toon-meta#121 / capability-market#4) ---------
+
+    #[test]
+    fn evaluate_binds_manifest_hash_not_raw_params() {
+        let manifest_bytes = encode_manifest(&p1_identity(), &p2_square(), 1_735_689_600);
+        let submission = encode_input(&[2]); // divergent input (2 vs 4)
+        let j = evaluate([6u8; 32], &manifest_bytes, &submission);
+        assert!(j.verdict);
+        assert_eq!(j.market_params_hash, journal::sha256(&manifest_bytes));
+        assert_ne!(
+            j.market_params_hash,
+            journal::sha256(&p1_identity()),
+            "must bind the manifest, not a raw program blob"
+        );
+        assert_eq!(j.submission_hash, journal::sha256(&submission));
+    }
+
+    #[test]
+    fn check_manifest_extracts_programs_by_name() {
+        let m = encode_manifest(&p1_identity(), &p2_square(), 0);
+        assert!(check_manifest(&m, &encode_input(&[2]))); // diverges
+        assert!(!check_manifest(&m, &encode_input(&[1]))); // fixed point: agrees
+    }
+
+    #[test]
+    fn malformed_manifest_is_false_not_panic() {
+        let sub = encode_input(&[2]);
+        assert!(!check_manifest(b"", &sub));
+        assert!(!check_manifest(b"garbage", &sub));
+        // Missing a program entry.
+        let one_prog = manifest::encode(&[
+            manifest::Entry::value(MANIFEST_PROGRAM_1, p1_identity()),
+            manifest::Entry::slot("submission"),
+        ])
+        .unwrap();
+        assert!(!check_manifest(&one_prog, &sub));
+    }
+
+    #[test]
+    fn wrong_step_budget_declaration_rejected() {
+        // A manifest advertising a step budget the interpreter doesn't enforce
+        // must be rejected (verdict false), even with valid programs + input.
+        let bad = manifest::encode(&[
+            manifest::Entry::value(MANIFEST_PROGRAM_1, p1_identity()),
+            manifest::Entry::value(MANIFEST_PROGRAM_2, p2_square()),
+            manifest::Entry::value(MANIFEST_STEP_BUDGET, (MAX_STEPS + 1).to_le_bytes().to_vec()),
+            manifest::Entry::slot("submission"),
+        ])
+        .unwrap();
+        assert!(!check_manifest(&bad, &encode_input(&[2])));
     }
 }

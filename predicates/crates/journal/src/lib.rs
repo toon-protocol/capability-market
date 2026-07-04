@@ -66,7 +66,8 @@ pub struct Journal {
     /// RISC Zero image ID of the guest that produced this journal
     /// (supplied as guest input; enforced on-chain, see module docs).
     pub image_id: [u8; 32],
-    /// sha256 of the market's canonical input manifest / params encoding.
+    /// sha256 of the market's canonical input-manifest bytes (toon-meta#121 /
+    /// capability-market#4): `marketParamsHash = sha256(manifest_bytes)`.
     pub market_params_hash: [u8; 32],
     /// sha256 of the raw submission bytes being judged.
     pub submission_hash: [u8; 32],
@@ -149,18 +150,21 @@ pub fn sha256(bytes: &[u8]) -> [u8; 32] {
     out
 }
 
-/// Assemble the journal every predicate commits: hashes the raw market-params
-/// and submission bytes exactly as received (before any parsing), so the
-/// on-chain commitments bind the bytes, not a parsed view of them.
+/// Assemble the journal every predicate commits. `market_params_preimage` is
+/// the exact bytes whose sha256 is `market_params_hash`: per toon-meta#121 /
+/// capability-market#4 this is the **canonical input-manifest bytes** (see the
+/// `manifest` crate), NOT the raw params — the guest passes the manifest bytes
+/// it read here. `submission` is hashed exactly as received (before any
+/// parsing), so both on-chain commitments bind the literal bytes.
 pub fn predicate_journal(
     image_id: [u8; 32],
-    market_params: &[u8],
+    market_params_preimage: &[u8],
     submission: &[u8],
     verdict: bool,
 ) -> Journal {
     Journal {
         image_id,
-        market_params_hash: sha256(market_params),
+        market_params_hash: sha256(market_params_preimage),
         submission_hash: sha256(submission),
         verdict,
     }

@@ -1,0 +1,74 @@
+{
+  "_comment": "Golden vectors for manifest-v1 canonical encoding (toon-meta#121). Shared conformance fixtures; regenerate via scripts, do not hand-edit.",
+  "vectors": [
+    {
+      "name": "matmul_flagship_rank46",
+      "entries": [
+        {
+          "name": "market_params",
+          "kind": "value",
+          "value_hex": "000000000000000000000000000000000000000000000000000000000000002e"
+        },
+        {
+          "name": "frozen_clock",
+          "kind": "value",
+          "value_hex": "8085746700000000"
+        },
+        {
+          "name": "submission",
+          "kind": "slot"
+        }
+      ],
+      "encoded": "544d46310300020c0066726f7a656e5f636c6f636b080000008085746700000000020d006d61726b65745f706172616d7320000000000000000000000000000000000000000000000000000000000000000000002e030a007375626d697373696f6e00000000",
+      "sha256": "0a029dce586c51f082c6b7e654926602e0602a3b32f7b3d11e9dd6c4cfa6ee0e"
+    },
+    {
+      "name": "single_submission_slot",
+      "entries": [
+        {
+          "name": "submission",
+          "kind": "slot"
+        }
+      ],
+      "encoded": "544d46310100030a007375626d697373696f6e00000000",
+      "sha256": "3a407288fabbe48f0a798b7a9a5eb6452a90b1bf60679f5ad21f2df1f3e4d78b"
+    },
+    {
+      "name": "hash_value_slot_mix",
+      "entries": [
+        {
+          "name": "params",
+          "kind": "hash",
+          "hash": "e9c54346bbce983af6c628d73aebb0b9c6d3f6a39597cf662972b23f4e4be6c3"
+        },
+        {
+          "name": "clock",
+          "kind": "value",
+          "value_hex": "2a00000000000000"
+        },
+        {
+          "name": "submission",
+          "kind": "slot"
+        }
+      ],
+      "encoded": "544d46310300020500636c6f636b080000002a00000000000000010600706172616d7320000000e9c54346bbce983af6c628d73aebb0b9c6d3f6a39597cf662972b23f4e4be6c3030a007375626d697373696f6e00000000",
+      "sha256": "20e5b698537974343ce37cb4cf558ed883cd58859b8001a3827d43d78ef920b5"
+    },
+    {
+      "name": "empty_value_entry",
+      "entries": [
+        {
+          "name": "flag",
+          "kind": "value",
+          "value_hex": ""
+        },
+        {
+          "name": "submission",
+          "kind": "slot"
+        }
+      ],
+      "encoded": "544d46310200020400666c616700000000030a007375626d697373696f6e00000000",
+      "sha256": "95dadda93c6c4bb4a61bcf09f44bf0cd67c7e53bef5e9644048e47b2bdf9f756"
+    }
+  ]
+}

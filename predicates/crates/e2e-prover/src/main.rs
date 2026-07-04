@@ -20,13 +20,16 @@
 use std::time::Instant;
 
 use anyhow::{bail, Context, Result};
-use matmul::{encode_market_params, encode_scheme, schemes};
+use matmul::{encode_manifest, encode_scheme, schemes};
 use risc0_zkvm::{compute_image_id, default_prover, ExecutorEnv, ProverOpts};
 
 fn main() -> Result<()> {
     let mut elf_path: Option<String> = None;
     let mut mode: Option<String> = None;
     let mut rank_bound: u32 = 49;
+    // Deadline literal pinned into the manifest (audit-only; the launch verdict
+    // is time-independent). Overridable so the e2e can pin the market's deadline.
+    let mut frozen_clock: u64 = 1_735_689_600;
 
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -40,6 +43,13 @@ fn main() -> Result<()> {
                     .parse()
                     .context("--rank-bound must be a u32")?
             }
+            "--frozen-clock" => {
+                frozen_clock = args
+                    .next()
+                    .context("--frozen-clock needs a unix timestamp")?
+                    .parse()
+                    .context("--frozen-clock must be a u64")?
+            }
             other => bail!("unknown argument: {other}"),
         }
     }
@@ -50,14 +60,16 @@ fn main() -> Result<()> {
     let image_id = compute_image_id(&elf)?;
     let image_id_bytes: [u8; 32] = *image_id.as_ref();
 
-    // Guest input manifest (toon-meta#121 order): image_id, market_params, submission.
-    // The rank-49 Strassen⊗Strassen scheme is the known-valid witness at bound 49.
-    let market_params = encode_market_params(rank_bound);
+    // Guest inputs (toon-meta#121 / capability-market#4): image_id,
+    // manifest_bytes, submission. The guest commits market_params_hash =
+    // sha256(manifest_bytes). The rank-49 Strassen⊗Strassen scheme is the
+    // known-valid witness at bound 49.
+    let manifest_bytes = encode_manifest(rank_bound, frozen_clock);
     let submission = encode_scheme(&schemes::strassen_4x4_rank49());
 
     let env = ExecutorEnv::builder()
         .write(&image_id_bytes)?
-        .write(&market_params.to_vec())?
+        .write(&manifest_bytes.to_vec())?
         .write(&submission.to_vec())?
         .build()?;
 
@@ -97,12 +109,21 @@ fn main() -> Result<()> {
         "journal image_id does not match the ELF image ID"
     );
 
+    // Independent check of the #4 binding: the committed market_params_hash
+    // MUST equal sha256(manifest_bytes).
+    anyhow::ensure!(
+        decoded.market_params_hash == journal::sha256(&manifest_bytes),
+        "market_params_hash is not sha256(manifest_bytes) — manifest binding broken"
+    );
+
     let seal = risc0_ethereum_contracts::encode_seal(&receipt)?;
 
     println!(
-        "{{\n  \"mode\": \"{mode}\",\n  \"rank_bound\": {rank_bound},\n  \"image_id\": \"0x{}\",\n  \"market_params_hash\": \"0x{}\",\n  \"solution_hash\": \"0x{}\",\n  \"journal_hex\": \"0x{}\",\n  \"seal_hex\": \"0x{}\",\n  \"proving_seconds\": {proving_seconds:.1}\n}}",
+        "{{\n  \"mode\": \"{mode}\",\n  \"rank_bound\": {rank_bound},\n  \"frozen_clock\": {frozen_clock},\n  \"image_id\": \"0x{}\",\n  \"market_params_hash\": \"0x{}\",\n  \"manifest_hex\": \"0x{}\",\n  \"manifest_sha256\": \"0x{}\",\n  \"solution_hash\": \"0x{}\",\n  \"journal_hex\": \"0x{}\",\n  \"seal_hex\": \"0x{}\",\n  \"proving_seconds\": {proving_seconds:.1}\n}}",
         hex::encode(image_id_bytes),
         hex::encode(decoded.market_params_hash),
+        hex::encode(&manifest_bytes),
+        hex::encode(journal::sha256(&manifest_bytes)),
         hex::encode(decoded.submission_hash),
         hex::encode(&journal_bytes),
         hex::encode(&seal),

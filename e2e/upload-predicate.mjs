@@ -10,6 +10,12 @@
 //
 // Usage:
 //   node e2e/upload-predicate.mjs <path-to-guest-elf> [--jwk <jwk.json>]
+//   node e2e/upload-predicate.mjs <path> --raw [--content-type <ct>] [--jwk <jwk.json>]
+//
+// `--raw` uploads the file VERBATIM (no gzip) — used for the canonical input
+// manifest bytes, whose sha256 is the market's marketParamsHash, so a fetcher
+// must get the exact bytes back (envelope spec §2.3 / §3.3 step 3). Default
+// content type for --raw is application/octet-stream.
 //
 // Prints the Arweave tx id on success. Keep the JWK out of git — by default a
 // fresh throwaway key is generated per run (the tx id, not the key, is what
@@ -31,23 +37,44 @@ async function main() {
     jwkPath = args[jwkFlag + 1];
     args.splice(jwkFlag, 2);
   }
+  const rawMode = args.includes("--raw");
+  if (rawMode) args.splice(args.indexOf("--raw"), 1);
+  let contentType = null;
+  const ctFlag = args.indexOf("--content-type");
+  if (ctFlag !== -1) {
+    contentType = args[ctFlag + 1];
+    args.splice(ctFlag, 2);
+  }
+  const type = rawMode ? "input-manifest" : "predicate-guest-elf";
   const elfPath = args[0];
   if (!elfPath) {
-    console.error("usage: node e2e/upload-predicate.mjs <guest-elf> [--jwk <jwk.json>]");
+    console.error("usage: node e2e/upload-predicate.mjs <path> [--raw] [--content-type <ct>] [--jwk <jwk.json>]");
     process.exit(2);
   }
 
   const raw = await readFile(elfPath);
-  // If the input is already a gzip stream (magic 1f 8b), upload it verbatim so
-  // the bytes pinned on Arweave are exactly the committed canonical artifact.
-  const alreadyGzip = raw.length > 2 && raw[0] === 0x1f && raw[1] === 0x8b;
-  const gz = alreadyGzip
-    ? raw
-    : gzipSync(raw, { level: zlibConstants.Z_BEST_COMPRESSION });
-  console.error(
-    `elf ${raw.length} bytes -> gzip ${gz.length} bytes` +
-      (alreadyGzip ? " (input was already gzip; uploading verbatim)" : "")
-  );
+  let payload, uploadContentType;
+  if (rawMode) {
+    // Verbatim upload — the pinned bytes must equal the exact input (the
+    // manifest bytes hashed into marketParamsHash).
+    payload = raw;
+    uploadContentType = contentType || "application/octet-stream";
+    console.error(`raw ${raw.length} bytes (verbatim, ${uploadContentType})`);
+  } else {
+    // If the input is already a gzip stream (magic 1f 8b), upload it verbatim
+    // so the bytes pinned on Arweave are exactly the committed canonical
+    // artifact.
+    const alreadyGzip = raw.length > 2 && raw[0] === 0x1f && raw[1] === 0x8b;
+    payload = alreadyGzip
+      ? raw
+      : gzipSync(raw, { level: zlibConstants.Z_BEST_COMPRESSION });
+    uploadContentType = contentType || "application/gzip";
+    console.error(
+      `elf ${raw.length} bytes -> gzip ${payload.length} bytes` +
+        (alreadyGzip ? " (input was already gzip; uploading verbatim)" : "")
+    );
+  }
+  const gz = payload;
   if (gz.length >= FREE_TIER_BYTES) {
     console.error(
       `WARNING: ${gz.length} bytes >= ${FREE_TIER_BYTES}; upload may require Turbo credits`
@@ -73,9 +100,9 @@ async function main() {
     fileSizeFactory: () => gz.length,
     dataItemOpts: {
       tags: [
-        { name: "Content-Type", value: "application/gzip" },
+        { name: "Content-Type", value: uploadContentType },
         { name: "App-Name", value: "toon-capability-market" },
-        { name: "Type", value: "predicate-guest-elf" },
+        { name: "Type", value: type },
       ],
     },
   });

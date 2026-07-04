@@ -139,3 +139,56 @@ cp e2e/.env.devnet-actors.example e2e/.env.devnet-actors  # fill in 5 funded wal
 The runner is idempotent about artifacts (builds `e2e-prover`, gunzips the
 canonical ELF, generates/caches both proofs under `e2e/out/`, gitignored) and
 writes a structured record to `e2e/out/results.env`.
+
+---
+
+## Re-run: input-manifest binding (capability-market#4, 2026-07-04)
+
+Regenerated the canonical matmul image after the guests moved to the input
+manifest (`marketParamsHash = sha256(canonical manifest bytes)`, NOT
+`sha256(raw params)`), then re-ran the **mock-verifier** lifecycle on live
+devnet to exercise the new binding on-chain. The mock path still runs the real
+guest and the contract still enforces every journal field check on `reveal`
+(`j.marketParamsHash == m.marketParamsHash`), so it fully proves the new
+preimage end-to-end. The real-Groth16 market was **not** re-run: the verifier
+is unaffected by the params-hash preimage (that path was already proven above).
+
+### Regenerated canonical artifact
+
+| field | old | new |
+|---|---|---|
+| image_id | `660d47e3…56e8ecff` | `80db88cd4190c8adf12b58c2aca51812b7a3ca82fa04a0a61c8f91b9dc9985b2` |
+| elf_sha256 | `f931359c…f094557d` | `ea087289e12f06e43889942608af12baba95a2457769f035c1a9707685ac5e2f` |
+| elf_bytes | 175880 | 178032 |
+| elf_gzip_bytes | 88048 | 89268 |
+| arweave_tx (ELF gz) | `62uFTWV3…HWEbfw` | `KRYHACfle56dsRYuEMXodlvpMSvpz2FCv1ApzxnWmzU` |
+| manifest_arweave_tx | — | `J2Ie4J5K6cYifr1oaKWckFA6bnVE356UEKGkCW5TS8g` |
+
+- Docker `cargo risczero build` run **twice from clean** → byte-identical ELF
+  (sha256 `ea087289…`) and identical image ID `80db88cd…` both times.
+- `check-predicate` round-trip (fetch → gunzip → `compute_image_id`) on the
+  refreshed `predicates/artifacts/matmul-guest.canonical.bin.gz` matches the
+  new image ID; the manifest bytes fetched back from Arweave hash to
+  `0a029dce…` (the flagship rank-46 `marketParamsHash`).
+
+### Mock market re-run (marketMock `0xd1aAc47737FdF1bb124121CE8eF0bee47dEd9AeA`)
+
+Fresh wallets, funded from the devnet faucet (ETH + test USDC). Short REAL-TIME
+windows only — no `evm_increaseTime`/`anvil_*` on the shared anvil.
+
+| assertion | result |
+|---|---|
+| prover: `market_params_hash == sha256(manifest_bytes)` | OK (`0x619ab7e8…d5b7d710`, rank-49 manifest) |
+| on-chain `market.marketParamsHash` at createMarket `== sha256(manifest)` | **OK** |
+| `reveal(…)` with the manifest-bound journal | resolved **ResolvedYes** (1) |
+
+- Market id `3` on marketMock; created, YES/NO staked, committed after the
+  real-time lock window, revealed with the dev-mode seal + manifest-bound
+  97-byte journal. The contract accepted the reveal, proving the on-chain
+  `marketParamsHash = sha256(manifest)` field check passes end-to-end.
+- Latest devnet block at run time: `0x60b`.
+
+The runner `run-lifecycle.sh` was updated to feed the manifest (via
+`e2e-prover`, which now emits `manifest_hex`/`manifest_sha256`) and to assert
+both the prover binding and the on-chain `marketParamsHash == sha256(manifest)`
+in `create_market`.
