@@ -1,0 +1,17 @@
+{
+  "name": "capability-market-kalypso",
+  "private": true,
+  "type": "module",
+  "description": "Optional Kalypso prover-market path: GPU-less RISC Zero proof outsourcing for the capability market (toon-meta#119 story 5, #84)",
+  "scripts": {
+    "prove:local:dev": "node prove.mjs --source local --mode dev",
+    "prove:local": "node prove.mjs --source local --mode groth16",
+    "prove:kalypso": "node prove.mjs --source kalypso",
+    "prove:auto": "node prove.mjs --source auto",
+    "test": "node test/self-check.mjs"
+  },
+  "dependencies": {
+    "ethers": "^6.6.6",
+    "kalypso-sdk": "^1.0.57"
+  }
+}
